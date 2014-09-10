@@ -108,10 +108,10 @@ public:
     int id;
     int wetdry;
   // TODO: change these fixedarrays to something else
-  FixedArray<int, MAX_NEIGHBORS> neighboringNodes;
-  FixedArray<int, MAX_BORDERS> residentNodes;
-  FixedArray<int, MAX_BORDERS> residentNodesAlive;
-    int numResidentNodes;
+  std::vector<int> neighboringNodes;
+  std::vector<int> residentNodes;
+  std::vector<int> residentNodesAlive;
+  int numResidentNodes;
     
 };
 // ContainerCell translates between the unstructured grid and the
@@ -122,7 +122,7 @@ typedef ContainerCell<DomainCell, 1000> ContainerCellType;
 typedef LibGeoDecomp::TopologiesHelpers::Topology<2, false, false, false > TopologyType;
 typedef LibGeoDecomp::Grid<ContainerCellType, TopologyType> GridType;
 typedef LibGeoDecomp::CoordMap<ContainerCellType, GridType> BaseNeighborhood;
-typedef LibGeoDecomp::NeighborhoodAdapter<BaseNeighborhood, int, DomainCell, 2> Neighborhood;
+typedef LibGeoDecomp::NeighborhoodAdapter<BaseNeighborhood, 2, DomainCell> Neighborhood;
 
 const Neighborhood *neighborhood;
 DomainCell *domainCell;
@@ -711,8 +711,10 @@ void runSimulation()
 
     std::string prunedDirname("/home/zbyerly/adcirclgd/meshes/parallel_quarter_annular_v50_99");
 
+    int steps = 100;
+
     SerialSimulator<ContainerCellType> sim(
-        new ADCIRCInitializer(prunedDirname, *steps));
+        new ADCIRCInitializer(prunedDirname, steps));
 
     //TODO fix this stuff
     //    int ioPeriod = 1;
