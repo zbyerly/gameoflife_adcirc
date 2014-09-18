@@ -122,7 +122,7 @@ typedef ContainerCell<DomainCell, 1000> ContainerCellType;
 typedef LibGeoDecomp::TopologiesHelpers::Topology<2, false, false, false > TopologyType;
 typedef LibGeoDecomp::Grid<ContainerCellType, TopologyType> GridType;
 typedef LibGeoDecomp::CoordMap<ContainerCellType, GridType> BaseNeighborhood;
-typedef LibGeoDecomp::NeighborhoodAdapter<BaseNeighborhood, 2, DomainCell> Neighborhood;
+typedef LibGeoDecomp::NeighborhoodAdapter<BaseNeighborhood, 2> Neighborhood;
 
 const Neighborhood *neighborhood;
 DomainCell *domainCell;
@@ -225,7 +225,7 @@ public:
                 node.pushNeighborNode(neighbors[j]);
             }
             
-            for (int j=0; j<ownerTable.size(); j++)
+	    /*            for (int j=0; j<ownerTable.size(); j++)
             {
                 if (ownerTable[j].ownerID == nodeID)
                 {
@@ -233,7 +233,7 @@ public:
                     node.pushResidentNode(ownerTable[j].globalID);
                 }
             }
-            
+            */
                 
             
             FloatCoord<2> gridCoordFloat = (node.center - minCoord) / quadrantDim;
