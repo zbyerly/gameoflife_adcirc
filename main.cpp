@@ -82,8 +82,8 @@ public:
 
     void pushResidentNode(const int resNodeID)
     {
-        this->residentNodes[this->numResidentNodes] = resNodeID;
-        this->numResidentNodes++;        
+        std::cerr << "resNodeID = " << resNodeID << "\n";
+        this->residentNodes.push_back(resNodeID);
     }
     
 
@@ -225,15 +225,21 @@ public:
                 node.pushNeighborNode(neighbors[j]);
             }
             
-	    /*            for (int j=0; j<ownerTable.size(); j++)
+            std::cout << "ownerTable.size = " << ownerTable.size() << "\n";
+            for (int j=0; j<ownerTable.size(); j++)
             {
+                std::cout << "j=" << j << "\n";
                 if (ownerTable[j].ownerID == nodeID)
                 {
                     std::cerr << "pushing to owner " << nodeID  << "\n";
+                    std::cerr << "ownerTable[j].ownerID = " << ownerTable[j].ownerID << "\n";
+                    std::cerr << "ownerTable[j].localID = " << ownerTable[j].localID << "\n";
+                    std::cerr << "ownerTable[j].globalID = " << ownerTable[j].globalID << "\n";
                     node.pushResidentNode(ownerTable[j].globalID);
+/*****************************************/                    
                 }
             }
-            */
+            
                 
             
             FloatCoord<2> gridCoordFloat = (node.center - minCoord) / quadrantDim;
