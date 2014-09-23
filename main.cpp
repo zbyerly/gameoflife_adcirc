@@ -63,11 +63,9 @@ public:
         }
     };
 
-    DomainCell(const LibGeoDecomp::FloatCoord<2>& center = FloatCoord<2>(), int id = 0, int wetdry = 0, int numResidentNodes = 0) :
-        center(center),
-        id(id),
-        wetdry(wetdry),
-        numResidentNodes(numResidentNodes)        
+    DomainCell(const LibGeoDecomp::FloatCoord<2>& center = FloatCoord<2>(), int id = 0) :
+        center(center), // Coordinates of the center of the domain
+        id(id)         // Integer ID of the domain
     {}
 
     template<typename NEIGHBORHOOD>
@@ -82,7 +80,6 @@ public:
 
     void pushResidentNode(const int resNodeID)
     {
-        std::cerr << "resNodeID = " << resNodeID << "\n";
         this->residentNodes.push_back(resNodeID);
     }
     
@@ -104,14 +101,15 @@ public:
         return ret;
     }
 
-    LibGeoDecomp::FloatCoord<2> center;
-    int id;
-    int wetdry;
-  // TODO: change these fixedarrays to something else
-  std::vector<int> neighboringNodes;
-  std::vector<int> residentNodes;
-  std::vector<int> residentNodesAlive;
-  int numResidentNodes;
+    LibGeoDecomp::FloatCoord<2> center; // Coordinates of the center
+                                        // of the Domain
+    int id; // ID of the domain
+
+    std::vector<int> neighboringNodes;   //IDs of neighboring nodes
+
+    std::vector<int> residentNodes;      //global ID of resident nodes
+//  TODO: Make a vector of 'nodes' where each node is an actual ADCIRC node
+
     
 };
 // ContainerCell translates between the unstructured grid and the
@@ -130,16 +128,11 @@ DomainCell *domainCell;
 template<typename NEIGHBORHOOD>
 void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
 {
-    std::cerr << "Entering c subroutine update\n";
-    // init callback, by which the Fortran code can retrieve data
     domainCell = this;
     neighborhood = &hood;
-    int numNodeNeighbors = neighboringNodes.size();
 
-//    update_node_(&id, &wetdry, &neighboringNodes[0], &numNodeNeighbors);
-    //outputBorderNodes is a vector of ints which are the "outgoing"
-    //border nodes, in *local* indices
-    int numResidentNodes=this->numResidentNodes;
+    //TODO: Interact with a C-style subroutine in another file
+    
 }
 
 
@@ -155,14 +148,11 @@ public:
         SimpleInitializer<ContainerCellType>(Coord<2>(), steps),
         meshDir(meshDir)
     {
-        std::cerr << "determining grid dimensions\n";
-        
         determineGridDimensions();
     }
     
     virtual void grid(GridType *grid)
     {
-        std::cerr << "Entering c subroutine grid\n";
         std::ifstream fort80File;
         
         int numberOfDomains;
@@ -193,7 +183,6 @@ public:
             int numberOfNeighbors;
             openfort18File(fort18File, i);
             readfort18(fort18File, &numberOfNeighbors, &i, &myNeighborTable);            
-//            std::cerr << "Domain: " << i << " number of neighbors: " << numberOfNeighbors << "\n";
             myNeighborTables.push_back(myNeighborTable);
 
             //Read fort.14 file for each domain
@@ -225,18 +214,11 @@ public:
                 node.pushNeighborNode(neighbors[j]);
             }
             
-            std::cout << "ownerTable.size = " << ownerTable.size() << "\n";
             for (int j=0; j<ownerTable.size(); j++)
             {
-                std::cout << "j=" << j << "\n";
                 if (ownerTable[j].ownerID == nodeID)
                 {
-                    std::cerr << "pushing to owner " << nodeID  << "\n";
-                    std::cerr << "ownerTable[j].ownerID = " << ownerTable[j].ownerID << "\n";
-                    std::cerr << "ownerTable[j].localID = " << ownerTable[j].localID << "\n";
-                    std::cerr << "ownerTable[j].globalID = " << ownerTable[j].globalID << "\n";
                     node.pushResidentNode(ownerTable[j].globalID);
-/*****************************************/                    
                 }
             }
             
@@ -283,7 +265,6 @@ private:
 
     void determineGridDimensions()
     {
-        std::cerr << "Entering c subroutine determineGridDimensions\n";
         std::ifstream fort80File;
         
         int numberOfDomains;
@@ -355,12 +336,7 @@ private:
     FloatCoord<2> determineCenter(std::vector<FloatCoord<3> > *points) 
     {
         FloatCoord<2> center;
-//        std::cerr << "points->size() = " << points->size() << "\n";
         for (int i=0; i < points->size(); i++){
-//            std::cerr << "points[0][" << i << "][0] = " << points[0][i][0] << "\n";
-//            std::cerr << "points[1][" << i << "] = " << points[1][i] << "\n";
-//            std::cerr << "points[" << i << "][0] = " << points[i][0] << "\n";
-//            std::cerr << "points[" << i << "][1] = " << points[i][1] << "\n";
             FloatCoord<2> coord(points[0][i][0],points[0][i][1]);
             center += coord;
         }
@@ -374,14 +350,11 @@ private:
         double maxDiameter = 0;
 
         int numPoints = points->size();
-//        std::cerr << "numPoints = " << numPoints << "\n";
         for (int point = 0; point < numPoints; ++point) {
             int numNeighbors = myNeighborTables[point].myNeighbors.size();
-//            std::cerr << "domain: " <<point << " numNeighbors = " << numNeighbors << "\n";            
             for (int i=0; i<numNeighbors; i++){
                 int neighborID = myNeighborTables[point].myNeighbors[i].neighborID;
                 double dist = getDistance(points[0][point],points[0][neighborID]);
-//                std::cerr << "neighborID = " << neighborID << " distance = " << dist << "\n";
                 maxDiameter = std::max(maxDiameter,dist);
             }
         }
@@ -398,21 +371,16 @@ private:
         
     void openfort80File(std::ifstream& meshFile)
     {
-        std::cerr << "Entering c subroutine openfort80File\n";
         std::string meshFileName = meshDir;
         meshFileName.append("/fort.80");
         meshFile.open(meshFileName.c_str());
         if (!meshFile) {
             throw std::runtime_error("could not open fort.80 file "+meshFileName);
-        } else {
-            std::cerr << "opened fort.80 file " << meshFileName << " successfully.\n";
-        }
-        
+        }         
     }
         
     void readfort80(std::ifstream& meshFile, int *numberOfDomains, int *numberOfElements, int *numberOfPoints, std::vector<ownerTableEntry> *ownerTable)
     {
-        std::cerr << "Entering c subroutine readfort80\n";
         std::string buffer(1024, ' ');
         //Discard first 3 lines:
         std::getline(meshFile, buffer);
@@ -427,10 +395,6 @@ private:
             
         meshFile >> *numberOfDomains;
             
-//        std::cerr << "number of elements: " << *numberOfElements << "\n"
-//                  << "number of points: " << *numberOfPoints << "\n"
-//                  << "number of domains: " << *numberOfDomains << "\n";    
-            
         //Discard rest of the line:
         std::getline(meshFile, buffer);
 
@@ -443,8 +407,6 @@ private:
         std::getline(meshFile, buffer);
         std::getline(meshFile, buffer);
         std::getline(meshFile, buffer);
-        
-//        std::cerr << buffer << "\n";
 
         for (int domain = 0; domain < *numberOfDomains; ++domain) {
             int buf;
@@ -457,13 +419,9 @@ private:
             //Discard rest of the line
             std::getline(meshFile, buffer);
             
-//            std::cerr << "Domain: " << domain << " numNodes: " << numNodes << "\n";
-            
             for (int node = 0; node < numNodes; ++node) {
                 int nodeNum;
                 meshFile >> nodeNum;
-                
-//                std::cerr << "Domain: " << domain << " Node: " << nodeNum << "\n";
             }
             
             // throw away the rest of the line
@@ -492,7 +450,6 @@ private:
 
     void openfort18File(std::ifstream& meshFile, int domainID)
     {
-        std::cerr << "Entering c subroutine openfort18File\n";
         std::string meshFileName = meshDir;
         meshFileName.append("/PE");
         std::stringstream buf;
@@ -501,7 +458,6 @@ private:
         buf << domainID;
         meshFileName.append(buf.str());
         meshFileName.append("/fort.18");
-//        std::cerr << meshFileName << "\n";
         meshFile.open(meshFileName.c_str());
         if (!meshFile) {
             throw std::runtime_error("could not open fort.18 file"+meshFileName);
@@ -511,7 +467,6 @@ private:
 
     void readfort18(std::ifstream& meshFile, int *numberOfNeighbors, const int *domainID, neighborTable *myNeighborTable)
     {
-        std::cerr << "Entering c subroutine readfort18\n";
         int numberOfElements;
         int numberOfNodes;
         int domainIDFromFile;
@@ -637,7 +592,6 @@ private:
 
     void openfort14File(std::ifstream& meshFile, int domainID)
     {
-        std::cerr << "Entering c subroutine openfort14File\n";
         std::string meshFileName = meshDir;
         meshFileName.append("/PE");
         std::stringstream buf;
@@ -646,7 +600,6 @@ private:
         buf << domainID;
         meshFileName.append(buf.str());
         meshFileName.append("/fort.14");
-//        std::cerr << meshFileName << "\n";
         meshFile.open(meshFileName.c_str());
         if (!meshFile) {
             throw std::runtime_error("could not open fort.14 file "+meshFileName);
@@ -657,7 +610,6 @@ private:
 
     void readFort14Header(std::ifstream& meshFile, int *numberOfElements, int *numberOfPoints)
     {
-        std::cerr << "Entering c subroutine readFort14Header\n";
         std::string buffer(1024, ' ');
         // discard first line, which only holds comments anyway
         std::getline(meshFile, buffer);
@@ -668,9 +620,6 @@ private:
         // discard remainder of line
         std::getline(meshFile, buffer);
 
-//        std::cerr << "numberOfElements: " << *numberOfElements << "\n"
-//                  << "numberOfPoints: " << *numberOfPoints << "\n";
-
         if (!meshFile.good()) {
             throw std::logic_error("could not read header");
         }
@@ -678,8 +627,6 @@ private:
 
     void readFort14Points(std::ifstream& meshFile, std::vector<FloatCoord<3> > *points, const int numberOfPoints)
     {
-        std::cerr << "Entering c subroutine readFort14Points\n";
-
         std::string buffer(1024, ' ');
 
         for (int i = 0; i < numberOfPoints; ++i) {
@@ -709,37 +656,37 @@ private:
 void runSimulation()
 {
   
+    // TODO: figure out what the stuff below is
     Coord<2> dim(3, 2);
     std::size_t numCells = 100;
     double minDistance = 100;
     double quadrantSize = 400;
     quadrantDim = FloatCoord<2>(quadrantSize, quadrantSize);
 
+    // Hardcoded link to the directory
     std::string prunedDirname("/home/zbyerly/adcirclgd/meshes/parallel_quarter_annular_v50_99");
 
-    int steps = 100;
+    // Hardcoded number of simulation steps
+    int steps = 1;
 
     SerialSimulator<ContainerCellType> sim(
         new ADCIRCInitializer(prunedDirname, steps));
 
     //TODO fix this stuff
-    //    int ioPeriod = 1;
-//    SiloWriter<ContainerCellType> *writer = new SiloWriter<ContainerCellType>("mesh", *ioPeriod);
-//    writer->addSelectorForUnstructuredGrid(
-//        &DomainCell::alive,
-//        "DomainCell_wetdry");
-//    sim.addWriter(writer);
+    /*
+    int ioPeriod = 1;
+    SiloWriter<ContainerCellType> *writer = new SiloWriter<ContainerCellType>("mesh", *ioPeriod);
+    writer->addSelectorForUnstructuredGrid(
+        &DomainCell::alive,
+        "DomainCell_wetdry");
+    sim.addWriter(writer);
+    */
 
     sim.run();
 }
 
 int main(int argc, char *argv[])
 {
-  //MPI_Init(&argc, &argv);
-  //Typemaps::initializeMaps();
-
     runSimulation();
-
-    //MPI_Finalize();
     return 0;
 }
