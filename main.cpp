@@ -42,6 +42,16 @@ FloatCoord<2> origin;
 FloatCoord<2> quadrantDim;
 // ------------
 
+struct SubNode
+{
+    int globalID;
+    int localID;
+    int alive;
+    FloatCoord<3> location;
+};
+
+    
+
 // Each instance represents one subdomain of an ADCIRC unstructured grid
 class DomainCell
 {
@@ -78,7 +88,7 @@ public:
         }
     }
 
-    void pushResidentNode(const int resNodeID)
+    void pushResidentNode(const SubNode resNodeID)
     {
         this->residentNodes.push_back(resNodeID);
     }
@@ -92,6 +102,8 @@ public:
     // fixme: I don't like that I have to specify this despite not needing it
     std::vector<LibGeoDecomp::FloatCoord<2> > getShape() const
     {
+        //Gift wrapping algorithm
+
         std::vector<LibGeoDecomp::FloatCoord<2> > ret;
         ret << center + FloatCoord<2>( 0.000, -0.001);
         ret << center + FloatCoord<2>(-0.001,  0.000);
@@ -107,9 +119,7 @@ public:
 
     std::vector<int> neighboringNodes;   //IDs of neighboring nodes
 
-    std::vector<int> residentNodes;      //global ID of resident nodes
-//  TODO: Make a vector of 'nodes' where each node is an actual ADCIRC node
-
+    std::vector<SubNode> residentNodes;
     
 };
 // ContainerCell translates between the unstructured grid and the
@@ -131,11 +141,18 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     domainCell = this;
     neighborhood = &hood;
 
+//    std::cout << "Hello, Welcome to nanostep " << nanoStep << ".\n";
+    std::cout << "I am domain number " << domainCell->id << ".\n";
+    std::cout << "I have " << domainCell->residentNodes.size() << " resident nodes.\n";
+    for (int i = 0; i < domainCell->residentNodes.size(); i++){
+        std::cout << domainCell->residentNodes[i].globalID << " ";
+        std::cout << domainCell->residentNodes[i].localID << " ";
+        std::cout << domainCell->residentNodes[i].location << "\n";
+    }
+    std::cout << "\n\n";
     //TODO: Interact with a C-style subroutine in another file
     
 }
-
-
 
 class ADCIRCInitializer : public SimpleInitializer<ContainerCellType>
 {
@@ -158,16 +175,17 @@ public:
         int numberOfDomains;
         int numberOfElements;
         int numberOfPoints;
+        
+        //Neighbor table stuff
         std::vector<ownerTableEntry> ownerTable;
         std::vector<neighborTable> myNeighborTables;
-        
+        //--------------------
+
         openfort80File(fort80File);
         readfort80(fort80File, &numberOfDomains, &numberOfElements, &numberOfPoints, &ownerTable);
 
-
         std::vector<std::vector<int> > neighboringDomains;        
         std::vector<FloatCoord<2> > centers;
-
 
         // clear grid:
         CoordBox<2> box = grid->boundingBox();
@@ -192,7 +210,8 @@ public:
             openfort14File(fort14File, i);
             readFort14Header(fort14File, &numberOfElements, &numberOfPoints);
             std::vector<FloatCoord<3> > points;
-            readFort14Points(fort14File, &points, numberOfPoints);            
+            std::vector<int> localIDs;
+            readFort14Points(fort14File, &points, &localIDs, numberOfPoints);            
             FloatCoord<2> center = determineCenter(&points);
             center /= numberOfPoints;
             
@@ -212,13 +231,20 @@ public:
             for (int j=0; j<numberOfNeighbors; j++)
             {
                 node.pushNeighborNode(neighbors[j]);
-            }
+            }            
             
             for (int j=0; j<ownerTable.size(); j++)
             {
                 if (ownerTable[j].ownerID == nodeID)
                 {
-                    node.pushResidentNode(ownerTable[j].globalID);
+                    SubNode thissubnode;
+//                    std::cout << "ownerTable[j].ownerID =" << ownerTable[j].ownerID << "\n";
+//                    std::cout << "ownerTable[j].localID =" << ownerTable[j].localID << "\n";
+//                    std::cout << "ownerTable[j].globalID =" << ownerTable[j].globalID << "\n";                    
+                    thissubnode.location = points[ownerTable[j].localID+1]; //FIXME
+                    thissubnode.localID = ownerTable[j].localID;
+                    thissubnode.globalID = ownerTable[j].globalID;
+                    node.pushResidentNode(thissubnode);
                 }
             }
             
@@ -292,12 +318,12 @@ private:
             openfort14File(fort14File, i);
             readFort14Header(fort14File, &numberOfElements, &numberOfPoints);
             std::vector<FloatCoord<3> > points;
-            readFort14Points(fort14File, &points, numberOfPoints);            
+            std::vector<int> localIDs;
+            readFort14Points(fort14File, &points, &localIDs, numberOfPoints);
             FloatCoord<2> center = determineCenter(&points);
             center /= numberOfPoints;
-            
             centers.push_back(center);
-        }        
+        }
 
         maxDiameter = determineMaximumDiameter(&centers, myNeighborTables);
         minCoord = FloatCoord<2>(
@@ -535,14 +561,18 @@ private:
         meshFile >> buffer;
         meshFile >> domainIDFromFile;
         meshFile >> numberOfResNodes;
-        
-        for (int i=0; i<numberOfResNodes; i++)
-        {
-            int node;
-            
-            meshFile >> node;
-            residentNodes.push_back(node);
-        }        
+
+/*        
+          for (int i=0; i<numberOfResNodes; i++)
+          {
+          int node;
+          meshFile >> node;
+          residentNodes.push_back(node);
+          SubNode node;
+          meshFile >> node.globalID;
+          residentNodes.push_back(node);
+          }        
+*/
         std::getline(meshFile, buffer); //Discard remainder of the
                                         //line.
 
@@ -625,21 +655,23 @@ private:
         }
     }
 
-    void readFort14Points(std::ifstream& meshFile, std::vector<FloatCoord<3> > *points, const int numberOfPoints)
+//    void readFort14Points(std::ifstream& meshFile, std::vector<FloatCoord<3> > *points, const int numberOfPoints)
+    void readFort14Points(std::ifstream& meshFile, std::vector<FloatCoord<3> > *points, std::vector<int> *localIDs, const int numberOfPoints)
     {
-        std::string buffer(1024, ' ');
+        std::string buffer(1024, ' ');        
 
         for (int i = 0; i < numberOfPoints; ++i) {
             FloatCoord<3> p;
-            int buf;
+            int localID;
 
-            meshFile >> buf;
+            meshFile >> localID;
             meshFile >> p[0];
             meshFile >> p[1];
             meshFile >> p[2];
             std::getline(meshFile, buffer);
 
             *points << p;
+            *localIDs << localID;
         }
 
         if (!meshFile.good()) {
