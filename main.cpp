@@ -50,6 +50,36 @@ struct SubNode
     FloatCoord<3> location;
 };
 
+bool floatCoordCompare(const FloatCoord<2> &a, const FloatCoord<2> &b)
+{
+    //sorts by x first
+    return a[0] < b[0] || (a[0] == b[0] && a[1] < b[1]);
+};
+
+std::vector<FloatCoord<2> > convexHull(std::vector<FloatCoord<2> > *points)
+{
+    std::cerr << "starting convex hull" << std::endl;
+    
+    int k = 0;
+    std::vector<FloatCoord<2> > hull = *points;
+    int leftMostID=0;
+
+    // sort "points" by y coordinate
+    std::sort(hull.begin(), hull.end(), floatCoordCompare);
+    
+    /*
+    for (int i=0; i<points->size(); i++){        
+        if (floatCoordCompare(points[0][leftMostID],points[0][i]))
+        {
+            leftMostID=i;
+        }
+    }
+    */
+
+//    std::cerr << "left most ID = " << leftMostID << "\n";
+    
+    return hull;
+}
     
 
 // Each instance represents one subdomain of an ADCIRC unstructured grid
@@ -88,9 +118,9 @@ public:
         }
     }
 
-    void pushResidentNode(const SubNode resNodeID)
+    void pushLocalNode(const SubNode resNodeID)
     {
-        this->residentNodes.push_back(resNodeID);
+        this->localNodes.push_back(resNodeID);
     }
     
 
@@ -102,13 +132,33 @@ public:
     // fixme: I don't like that I have to specify this despite not needing it
     std::vector<LibGeoDecomp::FloatCoord<2> > getShape() const
     {
-        //Gift wrapping algorithm
-
         std::vector<LibGeoDecomp::FloatCoord<2> > ret;
         ret << center + FloatCoord<2>( 0.000, -0.001);
         ret << center + FloatCoord<2>(-0.001,  0.000);
         ret << center + FloatCoord<2>( 0.000,  0.001);
         ret << center + FloatCoord<2>( 0.001,  0.000);
+        //Gift wrapping algorithm
+//        std::cerr << this->localNodes.size() << "\n";
+        
+        std::vector<FloatCoord<2> > points;
+        //Move localNode locations into a vector of FloatCoord<2>'s
+        for (int i=0; i<localNodes.size(); i++)
+        {
+            FloatCoord<2> point;
+            point[0]=localNodes[i].location[0];
+            point[1]=localNodes[i].location[1];
+            points.push_back(point);
+        }
+
+        std::cerr << "points.size() = " << points.size() << "\n";
+        std::cerr << "points = \n";
+        std::cerr <<  points << "\n";        
+        std::vector<LibGeoDecomp::FloatCoord<2> > ret2;
+        ret2 = convexHull(&points);
+        
+        std::cerr << "hull = \n";
+        std::cerr << ret2 << "\n";
+
 
         return ret;
     }
@@ -116,10 +166,11 @@ public:
     LibGeoDecomp::FloatCoord<2> center; // Coordinates of the center
                                         // of the Domain
     int id; // ID of the domain
+    int alive;
 
     std::vector<int> neighboringNodes;   //IDs of neighboring nodes
 
-    std::vector<SubNode> residentNodes;
+    std::vector<SubNode> localNodes;
     
 };
 // ContainerCell translates between the unstructured grid and the
@@ -141,17 +192,23 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     domainCell = this;
     neighborhood = &hood;
 
-//    std::cout << "Hello, Welcome to nanostep " << nanoStep << ".\n";
-    std::cout << "I am domain number " << domainCell->id << ".\n";
-    std::cout << "I have " << domainCell->residentNodes.size() << " resident nodes.\n";
-    for (int i = 0; i < domainCell->residentNodes.size(); i++){
-        std::cout << domainCell->residentNodes[i].globalID << " ";
-        std::cout << domainCell->residentNodes[i].localID << " ";
-        std::cout << domainCell->residentNodes[i].location << "\n";
+//    std::cerr << "Hello, Welcome to nanostep " << nanoStep << ".\n";
+    /*
+    std::cerr << "I am domain number " << domainCell->id << ".\n";
+    std::cerr << "I have " << domainCell->localNodes.size() << " local nodes.\n";
+    for (int i = 0; i < domainCell->localNodes.size(); i++){
+        std::cerr << domainCell->localNodes[i].globalID << " ";
+        std::cerr << domainCell->localNodes[i].localID << " ";
+        std::cerr << domainCell->localNodes[i].location << "\n";
     }
-    std::cout << "\n\n";
+    std::cerr << "\n";
+    */
     //TODO: Interact with a C-style subroutine in another file
-    
+
+    std::vector<FloatCoord<2> > shape = this->getShape();
+
+    std::cerr << shape << "\n";
+    std::cerr << "\n";    
 }
 
 class ADCIRCInitializer : public SimpleInitializer<ContainerCellType>
@@ -238,14 +295,36 @@ public:
                 if (ownerTable[j].ownerID == nodeID)
                 {
                     SubNode thissubnode;
-//                    std::cout << "ownerTable[j].ownerID =" << ownerTable[j].ownerID << "\n";
-//                    std::cout << "ownerTable[j].localID =" << ownerTable[j].localID << "\n";
-//                    std::cout << "ownerTable[j].globalID =" << ownerTable[j].globalID << "\n";                    
+//                    std::cerr << "ownerTable[j].ownerID =" << ownerTable[j].ownerID << "\n";
+//                    std::cerr << "ownerTable[j].localID =" << ownerTable[j].localID << "\n";
+//                    std::cerr << "ownerTable[j].globalID =" << ownerTable[j].globalID << "\n";                    
                     thissubnode.location = points[ownerTable[j].localID+1]; //FIXME
                     thissubnode.localID = ownerTable[j].localID;
                     thissubnode.globalID = ownerTable[j].globalID;
-                    node.pushResidentNode(thissubnode);
                 }
+            }
+
+            // Loop through all local nodes
+            for (int j=0; j<points.size(); j++)
+            {
+                SubNode thissubnode;
+                thissubnode.location = points[j];
+                thissubnode.localID = localIDs[j];
+                thissubnode.globalID = -1;
+                // Loop through all global nodes                
+                for (int k=0; k<ownerTable.size(); k++)
+                {
+                    // If the global node is owned by the current domain,
+                    if (nodeID == ownerTable[k].ownerID)
+                    {
+                        //Then 
+                        if (localIDs[j] == ownerTable[k].localID)
+                        {
+                            thissubnode.globalID = ownerTable[k].globalID;
+                        }
+                    }
+                }        
+                node.pushLocalNode(thissubnode);
             }
             
                 
@@ -256,7 +335,22 @@ public:
             ContainerCellType container = grid->get(gridCoord);
             container.insert(node.id, node);
             grid->set(gridCoord, container);            
-        }        
+
+
+
+
+        }
+/*
+    std::cerr << "Owner Table Contents:\n";
+    for (int i=0; i<ownerTable.size(); i++)
+    {
+        std::cerr << i << " ";
+        std::cerr << ownerTable[i].globalID << " ";
+        std::cerr << ownerTable[i].localID << " ";
+        std::cerr << ownerTable[i].ownerID  << "\n";
+    }
+*/  
+
     }
     
     
@@ -350,7 +444,7 @@ private:
             ceil(floatDimensions[1]));
 
         
-        std::cout << "geometry summary:\n"
+        std::cerr << "geometry summary:\n"
                   << "  minCoord: "    << minCoord    << "\n"
                   << "  maxCoord: "    << maxCoord    << "\n"
                   << "  maxDiameter: " << maxDiameter << "\n"
@@ -497,7 +591,7 @@ private:
         int numberOfNodes;
         int domainIDFromFile;
         int numberOfResNodes;
-        std::vector<int> residentNodes;        
+        std::vector<int> localNodes;        
 
         std::string buffer(1024, ' ');
         //Discard first line:
@@ -562,17 +656,6 @@ private:
         meshFile >> domainIDFromFile;
         meshFile >> numberOfResNodes;
 
-/*        
-          for (int i=0; i<numberOfResNodes; i++)
-          {
-          int node;
-          meshFile >> node;
-          residentNodes.push_back(node);
-          SubNode node;
-          meshFile >> node.globalID;
-          residentNodes.push_back(node);
-          }        
-*/
         std::getline(meshFile, buffer); //Discard remainder of the
                                         //line.
 
@@ -678,12 +761,7 @@ private:
             throw std::runtime_error("could not read points");
         }
     }
-
-
-};
-
-
-
+};    
 
 void runSimulation()
 {
@@ -710,10 +788,9 @@ void runSimulation()
     SiloWriter<ContainerCellType> *writer = new SiloWriter<ContainerCellType>("mesh", *ioPeriod);
     writer->addSelectorForUnstructuredGrid(
         &DomainCell::alive,
-        "DomainCell_wetdry");
+        "DomainCell_alive");
     sim.addWriter(writer);
     */
-
     sim.run();
 }
 
