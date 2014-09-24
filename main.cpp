@@ -50,6 +50,12 @@ struct SubNode
     FloatCoord<3> location;
 };
 
+double cross(const FloatCoord<2> &o, const FloatCoord<2> &a, const FloatCoord<2> &b)
+{
+    return (a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+}
+
+
 bool floatCoordCompare(const FloatCoord<2> &a, const FloatCoord<2> &b)
 {
     //sorts by x first
@@ -58,26 +64,28 @@ bool floatCoordCompare(const FloatCoord<2> &a, const FloatCoord<2> &b)
 
 std::vector<FloatCoord<2> > convexHull(std::vector<FloatCoord<2> > *points)
 {
-    std::cerr << "starting convex hull" << std::endl;
-    
     int k = 0;
-    std::vector<FloatCoord<2> > hull = *points;
+    std::vector<FloatCoord<2> > points_sorted = *points;
+    std::vector<FloatCoord<2> > hull(2*points_sorted.size());
     int leftMostID=0;
-
-    // sort "points" by y coordinate
-    std::sort(hull.begin(), hull.end(), floatCoordCompare);
     
-    /*
-    for (int i=0; i<points->size(); i++){        
-        if (floatCoordCompare(points[0][leftMostID],points[0][i]))
-        {
-            leftMostID=i;
-        }
+// sort "points" by y coordinate
+    std::sort(points_sorted.begin(), points_sorted.end(), floatCoordCompare);
+
+    int n = points_sorted.size();
+
+    for (int i=0; i<n; i++){        
+        while (k >= 2 && cross(hull[k-2], hull[k-1], points_sorted[i]) <= 0) k--;
+        hull[k++] = points_sorted[i];
     }
-    */
 
-//    std::cerr << "left most ID = " << leftMostID << "\n";
-    
+    for (int i=n-2, t=k+1; i>=0; i--){
+        while (k>=t && cross(hull[k-2], hull[k-1], points_sorted[i]) <=0 ) k--;
+        hull[k++]=points_sorted[i];
+    }
+
+    hull.resize(k);
+
     return hull;
 }
     
@@ -129,35 +137,46 @@ public:
         return center;
     }
 
-    // fixme: I don't like that I have to specify this despite not needing it
     std::vector<LibGeoDecomp::FloatCoord<2> > getShape() const
     {
-        std::vector<LibGeoDecomp::FloatCoord<2> > ret;
-        ret << center + FloatCoord<2>( 0.000, -0.001);
-        ret << center + FloatCoord<2>(-0.001,  0.000);
-        ret << center + FloatCoord<2>( 0.000,  0.001);
-        ret << center + FloatCoord<2>( 0.001,  0.000);
-        //Gift wrapping algorithm
-//        std::cerr << this->localNodes.size() << "\n";
-        
         std::vector<FloatCoord<2> > points;
+        std::vector<FloatCoord<2> > ret;
         //Move localNode locations into a vector of FloatCoord<2>'s
         for (int i=0; i<localNodes.size(); i++)
         {
             FloatCoord<2> point;
             point[0]=localNodes[i].location[0];
             point[1]=localNodes[i].location[1];
-            points.push_back(point);
+            // If statement makes only resident nodes count for the shape
+            if (localNodes[i].globalID != -1) {
+                points.push_back(point);
+            }
+        }
+        ret = convexHull(&points);        
+
+        int domainID=this->id;
+
+        //Open two files for output
+        std::ostringstream pointsfilename;
+        std::ostringstream hullfilename;
+        pointsfilename << "points" << domainID << ".dat";
+        hullfilename   << "hull"   << domainID << ".dat";
+        std::ofstream pointsfile(pointsfilename.str().c_str());
+        std::ofstream hullfile(hullfilename.str().c_str());
+        
+
+        for (int i=0; i<points.size(); i++)
+        {
+            pointsfile << points[i][0] << " " << points[i][1] << "\n";
+        }
+        
+        for (int i=0; i<ret.size(); i++)
+        {
+            hullfile << ret[i][0] << " " << ret[i][1] << "\n";
         }
 
-        std::cerr << "points.size() = " << points.size() << "\n";
-        std::cerr << "points = \n";
-        std::cerr <<  points << "\n";        
-        std::vector<LibGeoDecomp::FloatCoord<2> > ret2;
-        ret2 = convexHull(&points);
-        
-        std::cerr << "hull = \n";
-        std::cerr << ret2 << "\n";
+        pointsfile.close();
+        hullfile.close();
 
 
         return ret;
@@ -206,9 +225,6 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     //TODO: Interact with a C-style subroutine in another file
 
     std::vector<FloatCoord<2> > shape = this->getShape();
-
-    std::cerr << shape << "\n";
-    std::cerr << "\n";    
 }
 
 class ADCIRCInitializer : public SimpleInitializer<ContainerCellType>
@@ -323,7 +339,7 @@ public:
                             thissubnode.globalID = ownerTable[k].globalID;
                         }
                     }
-                }        
+                }
                 node.pushLocalNode(thissubnode);
             }
             
