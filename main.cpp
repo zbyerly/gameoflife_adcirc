@@ -42,6 +42,26 @@ FloatCoord<2> origin;
 FloatCoord<2> quadrantDim;
 // ------------
 
+struct neighbor
+{
+    int neighborID;
+    std::vector<int> sendNodes;
+    std::vector<int> recvNodes;
+};
+
+struct neighborTable 
+{
+    std::vector<neighbor> myNeighbors;
+};
+
+struct ownerTableEntry
+{
+    int globalID;
+    int localID;
+    int ownerID;
+};
+
+
 struct SubNode
 {
     int globalID;
@@ -126,6 +146,12 @@ public:
         }
     }
 
+    void pushNeighborTable(const neighborTable myNeighborTable)
+    {
+        this->myNeighborTable = myNeighborTable;
+    }
+    
+
     void pushLocalNode(const SubNode resNodeID)
     {
         this->localNodes.push_back(resNodeID);
@@ -156,6 +182,7 @@ public:
 
         int domainID=this->id;
 
+        /*
         //Open two files for output
         std::ostringstream pointsfilename;
         std::ostringstream hullfilename;
@@ -163,7 +190,7 @@ public:
         hullfilename   << "hull"   << domainID << ".dat";
         std::ofstream pointsfile(pointsfilename.str().c_str());
         std::ofstream hullfile(hullfilename.str().c_str());
-        
+
 
         for (int i=0; i<points.size(); i++)
         {
@@ -177,7 +204,7 @@ public:
 
         pointsfile.close();
         hullfile.close();
-
+        */
 
         return ret;
     }
@@ -188,6 +215,7 @@ public:
     int alive;
 
     std::vector<int> neighboringNodes;   //IDs of neighboring nodes
+    neighborTable myNeighborTable;
 
     std::vector<SubNode> localNodes;
     
@@ -210,10 +238,10 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
 {
     domainCell = this;
     neighborhood = &hood;
+    int domainID = domainCell->id;
 
 //    std::cerr << "Hello, Welcome to nanostep " << nanoStep << ".\n";
     /*
-    std::cerr << "I am domain number " << domainCell->id << ".\n";
     std::cerr << "I have " << domainCell->localNodes.size() << " local nodes.\n";
     for (int i = 0; i < domainCell->localNodes.size(); i++){
         std::cerr << domainCell->localNodes[i].globalID << " ";
@@ -222,6 +250,12 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     }
     std::cerr << "\n";
     */
+
+    //Exchange boundary values
+    std::cerr << "I am domain number " << domainID << ".\n";
+    std::cerr << domainCell->myNeighborTable.myNeighbors[0].neighborID << "\n";
+
+
     //TODO: Interact with a C-style subroutine in another file
 
     std::vector<FloatCoord<2> > shape = this->getShape();
@@ -274,7 +308,7 @@ public:
             int numberOfNeighbors;
             openfort18File(fort18File, i);
             readfort18(fort18File, &numberOfNeighbors, &i, &myNeighborTable);            
-            myNeighborTables.push_back(myNeighborTable);
+//            myNeighborTables.push_back(myNeighborTable);
 
             //Read fort.14 file for each domain
             int numberOfPoints;
@@ -300,6 +334,8 @@ public:
 
             int nodeID = i;
             DomainCell node(center, nodeID);
+
+            node.pushNeighborTable(myNeighborTable);
             
             for (int j=0; j<numberOfNeighbors; j++)
             {
@@ -377,27 +413,7 @@ private:
     std::string meshDir;
     double maxDiameter;
     FloatCoord<2> minCoord;
-    FloatCoord<2> maxCoord;
-    
-    struct neighbor
-    {
-        int neighborID;
-        std::vector<int> sendNodes;
-        std::vector<int> recvNodes;
-    };
-
-    struct neighborTable 
-    {
-        std::vector<neighbor> myNeighbors;
-    };
-
-    struct ownerTableEntry
-    {
-        int globalID;
-        int localID;
-        int ownerID;
-    };
-    
+    FloatCoord<2> maxCoord;    
 
     void determineGridDimensions()
     {
@@ -419,7 +435,9 @@ private:
             int numberOfNeighbors;
             openfort18File(fort18File, i);
             readfort18(fort18File, &numberOfNeighbors, &i, &myNeighborTable);            
+
             myNeighborTables.push_back(myNeighborTable);
+            // need to push 'myNeighborTable' to the domain
 
             //Read fort.14 file for each domain
             int numberOfPoints;
@@ -607,7 +625,7 @@ private:
         int numberOfNodes;
         int domainIDFromFile;
         int numberOfResNodes;
-        std::vector<int> localNodes;        
+        std::vector<int> localNodes;
 
         std::string buffer(1024, ' ');
         //Discard first line:
