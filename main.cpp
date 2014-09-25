@@ -240,21 +240,30 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     neighborhood = &hood;
     int domainID = domainCell->id;
 
-//    std::cerr << "Hello, Welcome to nanostep " << nanoStep << ".\n";
-    /*
-    std::cerr << "I have " << domainCell->localNodes.size() << " local nodes.\n";
-    for (int i = 0; i < domainCell->localNodes.size(); i++){
-        std::cerr << domainCell->localNodes[i].globalID << " ";
-        std::cerr << domainCell->localNodes[i].localID << " ";
-        std::cerr << domainCell->localNodes[i].location << "\n";
+    //Exchange boundary values
+    std::cerr << "I am domain number " << domainID << ", ";
+    //Loop over neighbors
+    int numNeighbors = myNeighborTable.myNeighbors.size();
+    std::cerr << "and I have " << numNeighbors << " neighbors.\n";
+    std::cerr << "They are:\n";
+    for (int i=0; i<numNeighbors; i++)
+    {
+        std::cerr << "  ";
+        std::cerr << domainCell->myNeighborTable.myNeighbors[i].neighborID;
+        std::cerr << ", to whom I will send: ";
+        for (int j=0; j<domainCell->myNeighborTable.myNeighbors[i].sendNodes.size(); j++)
+        {
+            std::cerr << domainCell->myNeighborTable.myNeighbors[i].sendNodes[j] << " ";
+        }
+        std::cerr << ", and from whom I will receive: ";
+        for (int j=0; j<domainCell->myNeighborTable.myNeighbors[i].recvNodes.size(); j++)
+        {
+            std::cerr << domainCell->myNeighborTable.myNeighbors[i].recvNodes[j] << " ";
+        }        
+        std::cerr << "\n";
     }
     std::cerr << "\n";
-    */
-
-    //Exchange boundary values
-    std::cerr << "I am domain number " << domainID << ".\n";
-    std::cerr << domainCell->myNeighborTable.myNeighbors[0].neighborID << "\n";
-
+    
 
     //TODO: Interact with a C-style subroutine in another file
 
@@ -305,10 +314,11 @@ public:
         for (int i=0; i< numberOfDomains; i++){            
             neighborTable myNeighborTable;
             std::ifstream fort18File;
-            int numberOfNeighbors;
+            int numberOfNeighbors=0;
             openfort18File(fort18File, i);
-            readfort18(fort18File, &numberOfNeighbors, &i, &myNeighborTable);            
-//            myNeighborTables.push_back(myNeighborTable);
+            myNeighborTable = readfort18(fort18File);
+            numberOfNeighbors = myNeighborTable.myNeighbors.size();
+            myNeighborTables.push_back(myNeighborTable);
 
             //Read fort.14 file for each domain
             int numberOfPoints;
@@ -347,9 +357,6 @@ public:
                 if (ownerTable[j].ownerID == nodeID)
                 {
                     SubNode thissubnode;
-//                    std::cerr << "ownerTable[j].ownerID =" << ownerTable[j].ownerID << "\n";
-//                    std::cerr << "ownerTable[j].localID =" << ownerTable[j].localID << "\n";
-//                    std::cerr << "ownerTable[j].globalID =" << ownerTable[j].globalID << "\n";                    
                     thissubnode.location = points[ownerTable[j].localID+1]; //FIXME
                     thissubnode.localID = ownerTable[j].localID;
                     thissubnode.globalID = ownerTable[j].globalID;
@@ -432,9 +439,10 @@ private:
         for (int i=0; i< numberOfDomains; i++){
             neighborTable myNeighborTable;
             std::ifstream fort18File;
-            int numberOfNeighbors;
+            int numberOfNeighbors=0;
             openfort18File(fort18File, i);
-            readfort18(fort18File, &numberOfNeighbors, &i, &myNeighborTable);            
+            myNeighborTable = readfort18(fort18File);
+            numberOfNeighbors = myNeighborTable.myNeighbors.size();
 
             myNeighborTables.push_back(myNeighborTable);
             // need to push 'myNeighborTable' to the domain
@@ -618,92 +626,29 @@ private:
         }    
     }
 
-
-    void readfort18(std::ifstream& meshFile, int *numberOfNeighbors, const int *domainID, neighborTable *myNeighborTable)
+    neighborTable readfort18(std::ifstream& meshFile)
     {
-        int numberOfElements;
-        int numberOfNodes;
-        int domainIDFromFile;
-        int numberOfResNodes;
-        std::vector<int> localNodes;
-
+        neighborTable myNeighborTable;
+        int numNeighbors;
         std::string buffer(1024, ' ');
-        //Discard first line:
-        std::getline(meshFile, buffer);
+        while (buffer != "COMM") 
+        {
+            meshFile >> buffer;
+        }
+        meshFile >> buffer; // PE
+            if (buffer != "PE"){
+                throw std::runtime_error("buffer does not match!");}        
+        meshFile >> numNeighbors;
 
-        //Discard first three entries of line 2:
-        meshFile >> buffer;
-        meshFile >> buffer;
-        meshFile >> buffer;
-        
-        meshFile >> numberOfElements;
-        std::getline(meshFile, buffer); //Discard the rest of the line
-
-        for (int i=0; i<numberOfElements; i++){std::getline(meshFile, buffer);}
-
-        //Discard first three entries of next line:
-        meshFile >> buffer;
-        meshFile >> buffer;
-        meshFile >> buffer;        
-        meshFile >> numberOfNodes;
-        std::getline(meshFile, buffer); //Discard the rest of the line
-        for (int i=0; i<numberOfNodes; i++){std::getline(meshFile, buffer);}
-
-        //NFLUXF line: manually discard for now.  May need to do
-        //something more robust later.
-        std::getline(meshFile, buffer);
-
-        //Discard first three entries of next line:        
-        meshFile >> buffer;
-        meshFile >> buffer;
-        meshFile >> buffer;        
-        int NETA;
-        meshFile >> NETA;
-        std::getline(meshFile, buffer); //Discard the rest of the line
-        for (int i=0; i<NETA; i++){std::getline(meshFile, buffer);}
-
-        //Discard first three entries of next line:        
-        meshFile >> buffer;
-        meshFile >> buffer;
-        meshFile >> buffer;        
-        int NSTAE;
-        meshFile >> NSTAE;
-        std::getline(meshFile, buffer); //Discard the rest of the line
-        for (int i=0; i<NSTAE; i++){std::getline(meshFile, buffer);}
-
-        //Discard first three entries of next line:        
-        meshFile >> buffer;
-        meshFile >> buffer;
-        meshFile >> buffer;        
-        int NSTAV;
-        meshFile >> NSTAV;
-        std::getline(meshFile, buffer); //Discard the rest of the line
-        for (int i=0; i<NSTAV; i++){std::getline(meshFile, buffer);}
-        
-        //Discard NSTAM and NSTAC lines manually
-        std::getline(meshFile, buffer);        
-        std::getline(meshFile, buffer);
-        
-        //RES NODE line:
-        meshFile >> buffer;
-        meshFile >> buffer;
-        meshFile >> domainIDFromFile;
-        meshFile >> numberOfResNodes;
-
-        std::getline(meshFile, buffer); //Discard remainder of the
-                                        //line.
-
-        //COMM PE line
-        meshFile >> buffer; //COMM
-        meshFile >> buffer; //PE
-        meshFile >> *numberOfNeighbors;
-        std::getline(meshFile, buffer);//discard rest of the line
-
-        for (int i=0; i<*numberOfNeighbors; i++){
+        for (int i=0; i<numNeighbors; i++){
             neighbor neighbor;
             int numberOfRecvNodes;
             meshFile >> buffer; //RECV
+            if (buffer != "RECV"){
+                throw std::runtime_error("buffer does not match!");}            
             meshFile >> buffer; //PE
+            if (buffer != "PE"){
+                throw std::runtime_error("buffer does not match!");}
             meshFile >> neighbor.neighborID;
             meshFile >> numberOfRecvNodes;
             std::getline(meshFile, buffer);//discard rest of the line
@@ -715,14 +660,18 @@ private:
                 neighbor.recvNodes.push_back(receiveNode);
             }
             std::getline(meshFile, buffer);//discard rest of the line
-            myNeighborTable->myNeighbors.push_back(neighbor);
+            myNeighborTable.myNeighbors.push_back(neighbor);
         }
         
-        for (int i=0; i<*numberOfNeighbors; i++){
+        for (int i=0; i<numNeighbors; i++){
             int neighbor;
             int numberOfSendNodes;
             meshFile >> buffer; //SEND
+            if (buffer != "SEND"){
+                throw std::runtime_error("buffer does not match!");}        
             meshFile >> buffer; //PE
+            if (buffer != "PE"){
+                throw std::runtime_error("buffer does not match!");}        
             meshFile >> neighbor;
             meshFile >> numberOfSendNodes;
             std::getline(meshFile, buffer);//discard rest of the line
@@ -730,12 +679,14 @@ private:
             for (int j=0; j<numberOfSendNodes; j++){
                 int sendNode;
                 meshFile >> sendNode;                
-                myNeighborTable->myNeighbors[i].sendNodes.push_back(sendNode);
+                myNeighborTable.myNeighbors[i].sendNodes.push_back(sendNode);
             }
             std::getline(meshFile, buffer);//discard rest of the line
         }
         
-    }    
+
+        return myNeighborTable;
+    }
 
     void openfort14File(std::ifstream& meshFile, int domainID)
     {
@@ -772,7 +723,6 @@ private:
         }
     }
 
-//    void readFort14Points(std::ifstream& meshFile, std::vector<FloatCoord<3> > *points, const int numberOfPoints)
     void readFort14Points(std::ifstream& meshFile, std::vector<FloatCoord<3> > *points, std::vector<int> *localIDs, const int numberOfPoints)
     {
         std::string buffer(1024, ' ');        
