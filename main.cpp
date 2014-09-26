@@ -68,6 +68,7 @@ struct SubNode
     int globalID;
     int localID;
     int alive;
+    int lastAlive;
     FloatCoord<3> location;
     std::vector<int> neighboringNodes;
 };
@@ -131,9 +132,10 @@ public:
         }
     };
 
-    DomainCell(const LibGeoDecomp::FloatCoord<2>& center = FloatCoord<2>(), int id = 0) :
+    DomainCell(const LibGeoDecomp::FloatCoord<2>& center = FloatCoord<2>(), int id = 0, int outputStep = 0) :
         center(center), // Coordinates of the center of the domain
-        id(id)         // Integer ID of the domain
+        id(id),         // Integer ID of the domain
+        outputStep(outputStep)
     {}
 
     template<typename NEIGHBORHOOD>
@@ -215,6 +217,8 @@ public:
     int id; // ID of the domain
     int alive;
 
+    int outputStep;
+
     std::vector<int> neighboringNodes;   //IDs of neighboring nodes
     neighborTable myNeighborTable;
 
@@ -242,6 +246,29 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     int domainID = domainCell->id;
     int numNeighbors = myNeighborTable.myNeighbors.size();
 
+    std::cerr << "step = " << outputStep << std::endl;
+
+    if (outputStep == 0) 
+    {
+        //Initial Output
+        std::ostringstream filename;
+        filename << "output" << domainID << "." << nanoStep << ".dat";
+        std::ofstream file(filename.str().c_str());
+        for (std::map<int, SubNode>::const_iterator i=localNodes.begin(); i!=localNodes.end(); ++i)
+        {
+            if (i->second.globalID != -1) 
+            {
+                file << i->second.localID << " ";
+                file << i->second.location[0] << " ";
+                file << i->second.location[1] << " ";
+                file << i->second.alive << std::endl;
+            }
+        }
+        file.close();
+    }
+    
+
+
      //Debugging
     /*
     std::cerr << "I am domain number " << domainID << ", ";
@@ -266,6 +293,12 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     }
     std::cerr << "\n";
     */
+
+    for (std::map<int, SubNode>::iterator i=localNodes.begin(); i!=localNodes.end(); ++i)
+    {        
+        i->second.lastAlive = i->second.alive;
+    }
+
 
     //Exchange boundary values
     //Loop over neighbors
@@ -292,7 +325,7 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
                 throw std::runtime_error("boundary node location mismatch!");
             }
 
-            localNodes[myLocalID].alive = incomingNodes[j].alive;
+            localNodes[myLocalID].lastAlive = incomingNodes[j].alive;
         }
     }
 
@@ -300,21 +333,52 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     
     //TODO: Interact with a C-style kernel subroutine in another file
 
+    //Simple Kernel
+    //Loop over local points
+    for (std::map<int, SubNode>::iterator i=localNodes.begin(); i!=localNodes.end(); ++i)
+    {        
+        int my_alive = i->second.lastAlive;
+        if (my_alive == 1)
+        {
+            //In this kernel, if the cell was alive previously, it
+            //will die the next timestep.
+            my_alive = 0;
+        } else {
+            //Count up neighbor alives
+            int sum = 0;
+//            std::cerr << "id = " << i->second.localID << ", neighbors =";
+            for (int j=0; j<i->second.neighboringNodes.size(); j++) {
+                sum += localNodes[i->second.neighboringNodes[j]].lastAlive;
+//                std::cerr << " " << i->second.neighboringNodes[j];
+           }            
+//            std::cerr << ", sum = " << sum << std::endl;
+            if (sum > 0)
+            {
+                my_alive = 1;
+            }
+        }
 
+        i->second.alive = my_alive;
+    }
+    
     //Output
-
-
     std::ostringstream filename;
-    filename << "output" << domainID << "." << nanoStep << ".dat";
+    filename << "output" << domainID << "." << outputStep+1 << ".dat";
     std::ofstream file(filename.str().c_str());
     for (std::map<int, SubNode>::const_iterator i=localNodes.begin(); i!=localNodes.end(); ++i)
     {
-        file << i->second.localID << " ";
-        file << i->second.location[0] << " ";
-        file << i->second.location[1] << " ";
-        file << i->second.alive << std::endl;
+        if (i->second.globalID != -1) 
+        {
+            file << i->second.localID << " ";
+            file << i->second.location[0] << " ";
+            file << i->second.location[1] << " ";
+            file << i->second.alive << std::endl;
+        }        
     }
     file.close();
+    outputStep++;
+    
+
     
 
 }
@@ -423,6 +487,13 @@ public:
                 thissubnode.localID = localIDs[j];
                 thissubnode.globalID = -1;
                 thissubnode.alive = 0;
+
+                // Initial Seed
+                if ( (nodeID == 0) && (thissubnode.localID == 5) ) 
+                {
+                    thissubnode.alive = 1;
+                }
+                
                 
                 // Loop through all global nodes                
                 for (int k=0; k<ownerTable.size(); k++)
@@ -471,11 +542,13 @@ public:
 
             //Debug
             //Loop over all points 
+            /*
             std::cerr << "domain = " << node.id << std::endl;
             for (std::map<int, SubNode>::const_iterator i=node.localNodes.begin(); i!=node.localNodes.end(); ++i)
             {
                 std::cerr << i->second.localID << " " << i->second.neighboringNodes << std::endl;
             }
+            */
 
             FloatCoord<2> gridCoordFloat = (node.center - minCoord) / quadrantDim;
             Coord<2> gridCoord(gridCoordFloat[0], gridCoordFloat[1]);
@@ -871,7 +944,7 @@ void runSimulation()
     std::string prunedDirname("/home/zbyerly/adcirclgd/meshes/parallel_quarter_annular_v50_99");
 
     // Hardcoded number of simulation steps
-    int steps = 1;
+    int steps = 50;
 
     SerialSimulator<ContainerCellType> sim(
         new ADCIRCInitializer(prunedDirname, steps));
