@@ -37,10 +37,10 @@
 using namespace boost::assign;
 using namespace LibGeoDecomp;
 
-// Added by ZDB
 FloatCoord<2> origin;
 FloatCoord<2> quadrantDim;
-// ------------
+
+//const std::size_t MAX_NEIGHBORS = 40;
 
 struct neighbor
 {
@@ -139,10 +139,29 @@ public:
     template<typename NEIGHBORHOOD>
     void update(const NEIGHBORHOOD& hood, int nanoStep);
 
+    std::vector<int> getBoundaryNodes(const int domainID) const
+    {
+        std::vector<int> outgoingNodeIDs;        
+        DomainCell domainCell = *this;
+        for (int i=0; i<domainCell.myNeighborTable.myNeighbors.size(); i++)
+        {
+            if (domainCell.myNeighborTable.myNeighbors[i].neighborID == domainID)
+            {
+                for (int j=0; j<domainCell.myNeighborTable.myNeighbors[i].sendNodes.size(); j++)
+                {
+                    outgoingNodeIDs.push_back(domainCell.myNeighborTable.myNeighbors[i].sendNodes[j]);
+                }
+            }
+            
+        }
+        
+        return outgoingNodeIDs;
+    }    
+
     void pushNeighborNode(const int neighborID)
     {
         if (std::count(neighboringNodes.begin(), neighboringNodes.end(), neighborID) == 0) {
-            neighboringNodes << neighborID;
+            neighboringNodes << neighborID;            
         }
     }
 
@@ -182,30 +201,6 @@ public:
 
         int domainID=this->id;
 
-        /*
-        //Open two files for output
-        std::ostringstream pointsfilename;
-        std::ostringstream hullfilename;
-        pointsfilename << "points" << domainID << ".dat";
-        hullfilename   << "hull"   << domainID << ".dat";
-        std::ofstream pointsfile(pointsfilename.str().c_str());
-        std::ofstream hullfile(hullfilename.str().c_str());
-
-
-        for (int i=0; i<points.size(); i++)
-        {
-            pointsfile << points[i][0] << " " << points[i][1] << "\n";
-        }
-        
-        for (int i=0; i<ret.size(); i++)
-        {
-            hullfile << ret[i][0] << " " << ret[i][1] << "\n";
-        }
-
-        pointsfile.close();
-        hullfile.close();
-        */
-
         return ret;
     }
 
@@ -217,7 +212,7 @@ public:
     std::vector<int> neighboringNodes;   //IDs of neighboring nodes
     neighborTable myNeighborTable;
 
-    std::vector<SubNode> localNodes;
+    std::vector<SubNode> localNodes;    
     
 };
 // ContainerCell translates between the unstructured grid and the
@@ -263,11 +258,15 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
         std::cerr << "\n";
     }
     std::cerr << "\n";
+
+    for (int i=0; i<numNeighbors; i++)
+    {
+        int neighborID = myNeighborTable.myNeighbors[i].neighborID;
+        std::cerr << "neighborID = " << neighborID << " ";
+        std::cerr << neighborhood[0][neighborID].getBoundaryNodes(domainID) << "\n";
+    }
     
-
-    //TODO: Interact with a C-style subroutine in another file
-
-    std::vector<FloatCoord<2> > shape = this->getShape();
+    //TODO: Interact with a C-style kernel subroutine in another file
 }
 
 class ADCIRCInitializer : public SimpleInitializer<ContainerCellType>
@@ -293,8 +292,8 @@ public:
         int numberOfPoints;
         
         //Neighbor table stuff
-        std::vector<ownerTableEntry> ownerTable;
         std::vector<neighborTable> myNeighborTables;
+        std::vector<ownerTableEntry> ownerTable;
         //--------------------
 
         openfort80File(fort80File);
@@ -399,16 +398,6 @@ public:
 
 
         }
-/*
-    std::cerr << "Owner Table Contents:\n";
-    for (int i=0; i<ownerTable.size(); i++)
-    {
-        std::cerr << i << " ";
-        std::cerr << ownerTable[i].globalID << " ";
-        std::cerr << ownerTable[i].localID << " ";
-        std::cerr << ownerTable[i].ownerID  << "\n";
-    }
-*/  
 
     }
     
@@ -766,7 +755,6 @@ void runSimulation()
     SerialSimulator<ContainerCellType> sim(
         new ADCIRCInitializer(prunedDirname, steps));
 
-    //TODO fix this stuff
     /*
     int ioPeriod = 1;
     SiloWriter<ContainerCellType> *writer = new SiloWriter<ContainerCellType>("mesh", *ioPeriod);
@@ -775,6 +763,7 @@ void runSimulation()
         "DomainCell_alive");
     sim.addWriter(writer);
     */
+
     sim.run();
 }
 
