@@ -155,15 +155,20 @@ public:
             }
             
         }
+
         for (int i=0; i<outgoingNodeIDs.size(); i++)
         {
 //            std::cerr << "outgoingNodeIDs[" << i << "] = " << outgoingNodeIDs[i] << "\n";
+
+            outgoingNodes.push_back(domainCell.localNodes[outgoingNodeIDs[i]]);
+            /*
             for (int j=0; j<domainCell.localNodes.size(); j++){
                 if (outgoingNodeIDs[i] == domainCell.localNodes[j].localID)
                 {
                     outgoingNodes.push_back(domainCell.localNodes[i]);
                 }
             }
+            */
             
         }
         
@@ -186,7 +191,8 @@ public:
 
     void pushLocalNode(const SubNode resNodeID)
     {
-        this->localNodes.push_back(resNodeID);
+//        this->localNodes.push_back(resNodeID);
+        this->localNodes[resNodeID.localID]=resNodeID;
     }
     
 
@@ -200,21 +206,21 @@ public:
         std::vector<FloatCoord<2> > points;
         std::vector<FloatCoord<2> > ret;
         //Move localNode locations into a vector of FloatCoord<2>'s
-        for (int i=0; i<localNodes.size(); i++)
+        for (std::map<int, SubNode>::const_iterator i=localNodes.begin(); i!=localNodes.end(); ++i)
         {
             FloatCoord<2> point;
-            point[0]=localNodes[i].location[0];
-            point[1]=localNodes[i].location[1];
+            point[0]=i->second.location[0];
+            point[1]=i->second.location[1];
+
             // If statement makes only resident nodes count for the shape
-            if (localNodes[i].globalID != -1) {
+            if (i->second.globalID != -1) {
                 points.push_back(point);
             }
         }
-        ret = convexHull(&points);        
 
-        int domainID=this->id;
+        ret = convexHull(&points);
 
-        return ret;
+        return ret;        
     }
 
     LibGeoDecomp::FloatCoord<2> center; // Coordinates of the center
@@ -225,8 +231,8 @@ public:
     std::vector<int> neighboringNodes;   //IDs of neighboring nodes
     neighborTable myNeighborTable;
 
-    std::vector<SubNode> localNodes;
-    
+    std::map<int,SubNode> localNodes;
+  
 };
 // ContainerCell translates between the unstructured grid and the
 // regular grid currently required by LGD
@@ -289,13 +295,23 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
         // Verify each node has the same location
         for (int j=0; j<incomingNodes.size(); j++)
         {
-//            int localID = myNeigborTable.myNeighbors[i].recvNodes[j].localID;
+            int myLocalID = myNeighborTable.myNeighbors[i].recvNodes[j];
+            FloatCoord<3> localCoords = localNodes[myLocalID].location;
+            FloatCoord<3> remoteCoords = incomingNodes[j].location;
+            if (localCoords != remoteCoords)
+            {
+                throw std::runtime_error("boundary node location mismatch!");
+            }
+            
+
 //            FloatCoord<3> location = localNodes
         }
         
         
 
     }
+
+    std::vector<FloatCoord<2> > points = getShape();
     
     //TODO: Interact with a C-style kernel subroutine in another file
 }
@@ -369,7 +385,6 @@ public:
             for (int j=0; j<numberOfNeighbors; j++){
                 neighbors.push_back(myNeighborTable.myNeighbors[j].neighborID);
             }
-            // I'm not sure if I need to do this.
             neighboringDomains.push_back(neighbors);
 
             int nodeID = i;
@@ -381,7 +396,8 @@ public:
             {
                 node.pushNeighborNode(neighbors[j]);
             }            
-            
+
+            // What does this loop do??
             for (int j=0; j<ownerTable.size(); j++)
             {
                 if (ownerTable[j].ownerID == nodeID)
@@ -549,7 +565,6 @@ private:
         FloatCoord<2> c = a-b;
         return sqrt(c[0]*c[0]+c[1]*c[1]);
     }
-    
         
     void openfort80File(std::ifstream& meshFile)
     {
