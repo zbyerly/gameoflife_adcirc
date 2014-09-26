@@ -139,9 +139,10 @@ public:
     template<typename NEIGHBORHOOD>
     void update(const NEIGHBORHOOD& hood, int nanoStep);
 
-    std::vector<int> getBoundaryNodes(const int domainID) const
+    std::vector<SubNode> getBoundaryNodes(const int domainID) const
     {
         std::vector<int> outgoingNodeIDs;        
+        std::vector<SubNode> outgoingNodes;        
         DomainCell domainCell = *this;
         for (int i=0; i<domainCell.myNeighborTable.myNeighbors.size(); i++)
         {
@@ -154,9 +155,21 @@ public:
             }
             
         }
+        for (int i=0; i<outgoingNodeIDs.size(); i++)
+        {
+//            std::cerr << "outgoingNodeIDs[" << i << "] = " << outgoingNodeIDs[i] << "\n";
+            for (int j=0; j<domainCell.localNodes.size(); j++){
+                if (outgoingNodeIDs[i] == domainCell.localNodes[j].localID)
+                {
+                    outgoingNodes.push_back(domainCell.localNodes[i]);
+                }
+            }
+            
+        }
         
-        return outgoingNodeIDs;
-    }    
+//        return outgoingNodeIDs;
+        return outgoingNodes;
+    }
 
     void pushNeighborNode(const int neighborID)
     {
@@ -212,7 +225,7 @@ public:
     std::vector<int> neighboringNodes;   //IDs of neighboring nodes
     neighborTable myNeighborTable;
 
-    std::vector<SubNode> localNodes;    
+    std::vector<SubNode> localNodes;
     
 };
 // ContainerCell translates between the unstructured grid and the
@@ -261,9 +274,27 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
 
     for (int i=0; i<numNeighbors; i++)
     {
+        std::vector<SubNode> incomingNodes;
         int neighborID = myNeighborTable.myNeighbors[i].neighborID;
-        std::cerr << "neighborID = " << neighborID << " ";
-        std::cerr << neighborhood[0][neighborID].getBoundaryNodes(domainID) << "\n";
+//        std::cerr << "neighborID = " << neighborID << " ";
+//        std::cerr << neighborhood[0][neighborID].getBoundaryNodes(domainID) << "\n";
+        incomingNodes = neighborhood[0][neighborID].getBoundaryNodes(domainID);
+        
+        // Verify we get the number of nodes we think we should be getting
+        if (incomingNodes.size() != myNeighborTable.myNeighbors[i].recvNodes.size())
+        {
+            throw std::runtime_error("boundary node number mismatch");
+        }
+        
+        // Verify each node has the same location
+        for (int j=0; j<incomingNodes.size(); j++)
+        {
+//            int localID = myNeigborTable.myNeighbors[i].recvNodes[j].localID;
+//            FloatCoord<3> location = localNodes
+        }
+        
+        
+
     }
     
     //TODO: Interact with a C-style kernel subroutine in another file
