@@ -253,11 +253,12 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     domainCell = this;
     neighborhood = &hood;
     int domainID = domainCell->id;
+    int numNeighbors = myNeighborTable.myNeighbors.size();
 
-    //Exchange boundary values
+     //Debugging
+    /*
     std::cerr << "I am domain number " << domainID << ", ";
     //Loop over neighbors
-    int numNeighbors = myNeighborTable.myNeighbors.size();
     std::cerr << "and I have " << numNeighbors << " neighbors.\n";
     std::cerr << "They are:\n";
     for (int i=0; i<numNeighbors; i++)
@@ -277,7 +278,10 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
         std::cerr << "\n";
     }
     std::cerr << "\n";
+    */
 
+    //Exchange boundary values
+    //Loop over neighbors
     for (int i=0; i<numNeighbors; i++)
     {
         std::vector<SubNode> incomingNodes;
@@ -289,7 +293,7 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
         // Verify we get the number of nodes we think we should be getting
         if (incomingNodes.size() != myNeighborTable.myNeighbors[i].recvNodes.size())
         {
-            throw std::runtime_error("boundary node number mismatch");
+            throw std::runtime_error("boundary node number mismatch!");
         }
         
         // Verify each node has the same location
@@ -302,18 +306,27 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
             {
                 throw std::runtime_error("boundary node location mismatch!");
             }
-            
 
-//            FloatCoord<3> location = localNodes
+            localNodes[myLocalID].alive = incomingNodes[j].alive;
         }
-        
-        
-
     }
 
-    std::vector<FloatCoord<2> > points = getShape();
+//    std::vector<FloatCoord<2> > points = getShape();
     
     //TODO: Interact with a C-style kernel subroutine in another file
+
+
+    //Output
+    /*
+    std::cerr << "I am domain number " << domainID << ".\n";
+    
+    for (std::map<int, SubNode>::const_iterator i=localNodes.begin(); i!=localNodes.end(); ++i)
+    {
+        std::cerr << "localID, alive  = " << i->second.localID << ", " << i->second.alive << std::endl;
+    }
+    */
+
+
 }
 
 class ADCIRCInitializer : public SimpleInitializer<ContainerCellType>
@@ -416,6 +429,8 @@ public:
                 thissubnode.location = points[j];
                 thissubnode.localID = localIDs[j];
                 thissubnode.globalID = -1;
+                thissubnode.alive = 0;
+                
                 // Loop through all global nodes                
                 for (int k=0; k<ownerTable.size(); k++)
                 {
