@@ -8,7 +8,6 @@
 #include <libgeodecomp/parallelization/serialsimulator.h>
 #include <libgeodecomp/parallelization/stripingsimulator.h>
 
-// Added by ZDB
 #include <libgeodecomp/storage/multicontainercell.h>
 #include <iostream>
 #include <fstream>
@@ -18,7 +17,6 @@
 #include <iomanip>
 #include <sstream>
 #include <math.h>
-// ------------
 
 #include <boost/assign/std/vector.hpp>
 
@@ -40,8 +38,6 @@ using namespace LibGeoDecomp;
 FloatCoord<2> origin;
 FloatCoord<2> quadrantDim;
 
-//const std::size_t MAX_NEIGHBORS = 40;
-
 struct neighbor
 {
     int neighborID;
@@ -61,6 +57,11 @@ struct ownerTableEntry
     int ownerID;
 };
 
+struct element
+{
+    std::vector<int> nodeIDs;
+};
+    
 
 struct SubNode
 {
@@ -68,6 +69,7 @@ struct SubNode
     int localID;
     int alive;
     FloatCoord<3> location;
+    std::vector<int> neighboringNodes;
 };
 
 double cross(const FloatCoord<2> &o, const FloatCoord<2> &a, const FloatCoord<2> &b)
@@ -78,7 +80,6 @@ double cross(const FloatCoord<2> &o, const FloatCoord<2> &a, const FloatCoord<2>
 
 bool floatCoordCompare(const FloatCoord<2> &a, const FloatCoord<2> &b)
 {
-    //sorts by x first
     return a[0] < b[0] || (a[0] == b[0] && a[1] < b[1]);
 };
 
@@ -89,7 +90,6 @@ std::vector<FloatCoord<2> > convexHull(std::vector<FloatCoord<2> > *points)
     std::vector<FloatCoord<2> > hull(2*points_sorted.size());
     int leftMostID=0;
     
-// sort "points" by y coordinate
     std::sort(points_sorted.begin(), points_sorted.end(), floatCoordCompare);
 
     int n = points_sorted.size();
@@ -158,21 +158,9 @@ public:
 
         for (int i=0; i<outgoingNodeIDs.size(); i++)
         {
-//            std::cerr << "outgoingNodeIDs[" << i << "] = " << outgoingNodeIDs[i] << "\n";
-
             outgoingNodes.push_back(domainCell.localNodes[outgoingNodeIDs[i]]);
-            /*
-            for (int j=0; j<domainCell.localNodes.size(); j++){
-                if (outgoingNodeIDs[i] == domainCell.localNodes[j].localID)
-                {
-                    outgoingNodes.push_back(domainCell.localNodes[i]);
-                }
-            }
-            */
-            
         }
         
-//        return outgoingNodeIDs;
         return outgoingNodes;
     }
 
@@ -191,7 +179,6 @@ public:
 
     void pushLocalNode(const SubNode resNodeID)
     {
-//        this->localNodes.push_back(resNodeID);
         this->localNodes[resNodeID.localID]=resNodeID;
     }
     
@@ -286,8 +273,6 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     {
         std::vector<SubNode> incomingNodes;
         int neighborID = myNeighborTable.myNeighbors[i].neighborID;
-//        std::cerr << "neighborID = " << neighborID << " ";
-//        std::cerr << neighborhood[0][neighborID].getBoundaryNodes(domainID) << "\n";
         incomingNodes = neighborhood[0][neighborID].getBoundaryNodes(domainID);
         
         // Verify we get the number of nodes we think we should be getting
@@ -317,15 +302,20 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
 
 
     //Output
-    /*
-    std::cerr << "I am domain number " << domainID << ".\n";
-    
+
+
+    std::ostringstream filename;
+    filename << "output" << domainID << "." << nanoStep << ".dat";
+    std::ofstream file(filename.str().c_str());
     for (std::map<int, SubNode>::const_iterator i=localNodes.begin(); i!=localNodes.end(); ++i)
     {
-        std::cerr << "localID, alive  = " << i->second.localID << ", " << i->second.alive << std::endl;
+        file << i->second.localID << " ";
+        file << i->second.location[0] << " ";
+        file << i->second.location[1] << " ";
+        file << i->second.alive << std::endl;
     }
-    */
-
+    file.close();
+    
 
 }
 
@@ -422,6 +412,9 @@ public:
                 }
             }
 
+            // Read elements 
+            std::vector<element> myElements = readElements(fort14File, numberOfElements);
+
             // Loop through all local nodes
             for (int j=0; j<points.size(); j++)
             {
@@ -447,8 +440,43 @@ public:
                 node.pushLocalNode(thissubnode);
             }
             
+            //Assemble local linking information
+            //Loop over all Elements
+            for (int j=0; j<myElements.size(); j++)
+            {
+                //std::cerr << "elementid = " << j << std::endl;
+                //Loop over nodes associated with the element
+                for (int k=0; k<myElements[j].nodeIDs.size(); k++)
+                {
+                    int outer_nodeID = node.localNodes[myElements[j].nodeIDs[k]].localID;
+                    //std::cerr << "outer_nodeID = " << outer_nodeID << std::endl;
+                    for (int l=0; l<myElements[k].nodeIDs.size(); l++)
+                    {
+                        int inner_nodeID = node.localNodes[myElements[j].nodeIDs[l]].localID;
+                        //std::cerr << "inner_nodeID = " << inner_nodeID << std::endl;
+                        bool notAlreadyThere = (std::count(
+                            node.localNodes[inner_nodeID].neighboringNodes.begin(),
+                            node.localNodes[inner_nodeID].neighboringNodes.end(),
+                            outer_nodeID) == 0);
+                        if ( (outer_nodeID != inner_nodeID) && notAlreadyThere)
+                        {
+                            node.localNodes[inner_nodeID].neighboringNodes.push_back(outer_nodeID);
+                            //std::cerr << node.localNodes[inner_nodeID].neighboringNodes;
+                        }
+                    }
+                    
+                }
                 
-            
+            }
+
+            //Debug
+            //Loop over all points 
+            std::cerr << "domain = " << node.id << std::endl;
+            for (std::map<int, SubNode>::const_iterator i=node.localNodes.begin(); i!=node.localNodes.end(); ++i)
+            {
+                std::cerr << i->second.localID << " " << i->second.neighboringNodes << std::endl;
+            }
+
             FloatCoord<2> gridCoordFloat = (node.center - minCoord) / quadrantDim;
             Coord<2> gridCoord(gridCoordFloat[0], gridCoordFloat[1]);
 
@@ -795,7 +823,39 @@ private:
             throw std::runtime_error("could not read points");
         }
     }
+
+    std::vector<element> readElements(
+        std::ifstream& meshFile,
+        const int numberOfElements)
+    {
+        std::vector<element> ret;
+        if (!meshFile.good()) {
+            throw std::runtime_error("could not read elements");
+        }
+        std::string buffer(1024, ' ');
+        for (int elem = 0; elem < numberOfElements; ++elem) {
+            element myElement;
+            int buf;
+            int numNodes;
+            meshFile >> buf; // Element number
+            meshFile >> numNodes; // will always be 3
+            std::vector<int> nodeIDs;
+            for (int i = 0; i < numNodes; ++i) {
+                int node;
+                meshFile >> node;
+                nodeIDs.push_back(node);
+            }
+            std::getline(meshFile, buffer);
+            myElement.nodeIDs = nodeIDs;
+            ret.push_back(myElement);
+        }
+        
+        return ret;
+    }
+
 };    
+
+
 
 void runSimulation()
 {
