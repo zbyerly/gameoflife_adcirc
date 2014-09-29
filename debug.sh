@@ -1,1 +1,0 @@
-g++ `pkg-config --cflags --libs libgeodecomp` -g main.cpp -o GOL_adc
