@@ -216,7 +216,7 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     {
         //Initial Output
         std::ostringstream filename;
-        filename << "output" << domainID << "." << nanoStep << ".dat";
+        filename << "data/output" << domainID << "." << nanoStep << ".dat";
         std::ofstream file(filename.str().c_str());
         for (std::map<int, SubNode>::const_iterator i=localNodes.begin(); i!=localNodes.end(); ++i)
         {
@@ -327,7 +327,7 @@ void DomainCell::update(const NEIGHBORHOOD& hood, int nanoStep)
     
     //Output
     std::ostringstream filename;
-    filename << "output" << domainID << "." << outputStep+1 << ".dat";
+    filename << "data/output" << domainID << "." << outputStep+1 << ".dat";
     std::ofstream file(filename.str().c_str());
     for (std::map<int, SubNode>::const_iterator i=localNodes.begin(); i!=localNodes.end(); ++i)
     {
@@ -907,10 +907,10 @@ void runSimulation()
     quadrantDim = FloatCoord<2>(quadrantSize, quadrantSize);
 
     // Hardcoded link to the directory
-    std::string prunedDirname("/home/zbyerly/adcirclgd/meshes/parallel_quarter_annular_v50_99");
+    std::string prunedDirname("/home/zbyerly/adcirclgd/meshes/shin32");
 
     // Hardcoded number of simulation steps
-    int steps = 50;
+    int steps = 100;
 
     SerialSimulator<ContainerCellType> sim(
         new ADCIRCInitializer(prunedDirname, steps));

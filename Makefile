@@ -7,4 +7,4 @@ GOL_adcirc: $(OBJS) main.cpp
 	$(CC) $(CFLAGS) $(OBJS) main.cpp -o GOL_adc
 
 clean: 
-	rm *.o GOL_adc
+	rm *.o GOL_adc data/* plotting/plots/*
