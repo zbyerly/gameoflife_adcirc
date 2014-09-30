@@ -1,3 +1,4 @@
+<!-*-JavaScript-*->
 <!DOCTYPE html>
 <html>
   <head>
@@ -25,106 +26,176 @@
       src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAB6otSeI_-Q3xY84eIbTNy02kogjnt0Fg">
     </script>
     <script type="text/javascript">
-      var overlay;
+    
+//******************************************************************************
 
-      ADCIRCOverlay.prototype = new google.maps.OverlayView();
+var overlay;
 
-      function initialize() {
+ADCIRCOverlay.prototype = new google.maps.OverlayView();
 
-      var swBound = new google.maps.LatLng(40.3,-73.0)
-      var neBound = new google.maps.LatLng(41.0,-72.0)
-      var bounds = new google.maps.LatLngBounds(swBound,neBound);
-      
+function initialize() {
+    
+    var swBound = new google.maps.LatLng(40.3,-73.0)
+    var neBound = new google.maps.LatLng(41.0,-72.0)
+    var bounds = new google.maps.LatLngBounds(swBound,neBound);
+    
+    
+    var mapOptions = {
+        center: { lat: 40.8, lng: -72.5},
+        zoom: 12
+    };
+    var map = new google.maps.Map(document.getElementById('map-canvas'),
+                                  mapOptions);
+    
+    var srcImage = 'output0.png';
+    
+    overlay = new ADCIRCOverlay(bounds, srcImage, map);
+}
 
-      var mapOptions = {
-      center: { lat: 40.8, lng: -72.5},
-      zoom: 12
-        };
-        var map = new google.maps.Map(document.getElementById('map-canvas'),
-      mapOptions);
 
-      var srcImage = 'output0.png';
+function ADCIRCOverlay(bounds, image, map) {
+    
+    this.bounds_ = bounds;
+    this.image_ = image;
+    this.map_ = map;
+    
+    this.div_ = null;
+    
+    this.setMap(map);
+}
 
-      overlay = new ADCIRCOverlay(bounds, srcImage, map);
-      }
+ADCIRCOverlay.prototype.onAdd = function () {
+    
+    var div = document.createElement('div');
+    div.style.border = 'none';
+    div.style.borderWidth = '0px';
+    div.style.position = 'absolute';
+    
+    var img = document.createElement('img');
+    img.src = this.image_;
+    img.style.width = '100%';
+    img.style.height = '100%';
+    div.appendChild(img);
+    
+    this.div_ = div;
+    
+    var panes = this.getPanes();
+    panes.overlayImage.appendChild(this.div_);
+};
+
+ADCIRCOverlay.prototype.draw = function() {
+    var overlayProjection = this.getProjection();
+    
+    var sw = overlayProjection.fromLatLngToDivPixel(this.bounds_.getSouthWest());
+    var ne = overlayProjection.fromLatLngToDivPixel(this.bounds_.getNorthEast());
+    
+    var div = this.div_;
+    div.style.left = sw.x + 'px';
+    div.style.top = ne.y + 'px';
+    div.style.width = (ne.x - sw.x) + 'px';
+    div.style.height = (sw.y - ne.y) + 'px';
+};
+
+ADCIRCOverlay.prototype.hide = function() {
+    if (this.div_) {
+        this.div_.style.visibility = 'hidden';
+    }
+};
 
 
-      function ADCIRCOverlay(bounds, image, map) {
+ADCIRCOverlay.prototype.show = function() {
+    if (this.div_) {
+        this.div_.style.visibility = 'visible';
+    }
+};
 
-      this.bounds_ = bounds;
-      this.image_ = image;
-      this.map_ = map;
+ADCIRCOverlay.prototype.toggle = function() {
+    if (this.div_) {
+        if (this.div_.style.visibility == 'hidden') {
+            this.show();
+        } else {
+            this.hide();
+        }
+    }
+};      
 
-      this.div_ = null;
+ADCIRCOverlay.prototype.toggleDOM = function() {
+    if (this.getMap()) {
+        this.setMap(null);
+    } else {
+        this.setMap(this.map_);
+    }
+};
 
-      this.setMap(map);
-      }
+function readTextFile(file)
+{
+    var rawFile = new XMLHttpRequest();
+    rawFile.open("GET", file, false);
+    rawFile.onreadystatechange = function ()
+    {
+        if(rawFile.readyState === 4)
+        {
+            if(rawFile.status === 200 || rawFile.status == 0)
+            {
+                var allText = rawFile.responseText;
+                
+                var lines=allText.split("\n");
+                
+                var locations;
+                
+                for (i = 0; i < lines.length; ++i) 
+                {
+                    if (lines[i].split(" ")[3] == 1)
+                    {
+                        var loc = [lines[i].split(" ")[1],lines[i].split(" ")[2]];
+                        
+                        alert(loc);
+                        
+                    }
+                }
+                
+            }
+            
+        }
+        
+    }
+    rawFile.send(null);
+}
 
-      ADCIRCOverlay.prototype.onAdd = function () {
 
-      var div = document.createElement('div');
-      div.style.border = 'none';
-      div.style.borderWidth = '0px';
-      div.style.position = 'absolute';
 
-      var img = document.createElement('img');
-      img.src = this.image_;
-      img.style.width = '100%';
-      img.style.height = '100%';
-      div.appendChild(img);
+readTextFile("output0.0.dat");
+ 
 
-      this.div_ = div;
-
-      var panes = this.getPanes();
-      panes.overlayImage.appendChild(this.div_);
-      };
-
-      ADCIRCOverlay.prototype.draw = function() {
-      var overlayProjection = this.getProjection();
-     
-      var sw = overlayProjection.fromLatLngToDivPixel(this.bounds_.getSouthWest());
-      var ne = overlayProjection.fromLatLngToDivPixel(this.bounds_.getNorthEast());
-      
-      var div = this.div_;
-      div.style.left = sw.x + 'px';
-      div.style.top = ne.y + 'px';
-      div.style.width = (ne.x - sw.x) + 'px';
-      div.style.height = (sw.y - ne.y) + 'px';
-      };
-
-      ADCIRCOverlay.prototype.hide = function() {
-      if (this.div_) {
-      this.div_.style.visibility = 'hidden';
-      }
-      };
-
-      
-      ADCIRCOverlay.prototype.show = function() {
-      if (this.div_) {
-      this.div_.style.visibility = 'visible';
-      }
-      };
-      
-      ADCIRCOverlay.prototype.toggle = function() {
-      if (this.div_) {
-      if (this.div_.style.visibility == 'hidden') {
-      this.show();
-      } else {
-      this.hide();
-      }
-      }
-      };      
-
-      ADCIRCOverlay.prototype.toggleDOM = function() {
-      if (this.getMap()) {
-      this.setMap(null);
-      } else {
-      this.setMap(this.map_);
-      }
-      };
-
-      google.maps.event.addDomListener(window, 'load', initialize);
-
+function setSharks(map, sharkLocations) {
+    var image = {
+        url: 'shark.png',
+        size: new google.maps.Size(20,32),
+        origin: new google.maps.Point(0,0),
+        anchor: new google.maps.Point(0,32)
+    };
+    var shape = {
+        coords: [1, 1, 1, 20, 18, 20, 18 , 1],
+        type: 'poly'
+    };
+    
+    for (var i = 0; i < sharkLocations.length; i++) {
+        var loc = sharkLocations[i];
+        var myLatLng = new google.maps.LatLng(loc[0], loc[1]);
+        var marker = new google.maps.Marker({
+            position: myLatLng,
+            map: map,
+            icon: image,
+            shape: shape,
+            title: " ",
+            zIndex: 0
+        });
+    }
+}
+        
+        google.maps.event.addDomListener(window, 'load', initialize);
+        
+//******************************************************************************
     </script>
   </head>
   <body>
