@@ -29,27 +29,27 @@
     
 //******************************************************************************
 
-var overlay;
 
-ADCIRCOverlay.prototype = new google.maps.OverlayView();
+var map;
 
 function initialize() {
-    
+
     var swBound = new google.maps.LatLng(40.3,-73.0)
     var neBound = new google.maps.LatLng(41.0,-72.0)
     var bounds = new google.maps.LatLngBounds(swBound,neBound);
     
-    
     var mapOptions = {
         center: { lat: 40.8, lng: -72.5},
-        zoom: 12
+        zoom: 10
+        //zoom: 12
     };
-    var map = new google.maps.Map(document.getElementById('map-canvas'),
+    
+    map = new google.maps.Map(document.getElementById('map-canvas'),
                                   mapOptions);
-    
     var srcImage = 'output0.png';
-    
-    overlay = new ADCIRCOverlay(bounds, srcImage, map);
+    ADCIRCOverlay.prototype = new google.maps.OverlayView();
+    var overlay = new ADCIRCOverlay(bounds, srcImage, map);
+
 }
 
 
@@ -127,8 +127,19 @@ ADCIRCOverlay.prototype.toggleDOM = function() {
     }
 };
 
-function readTextFile(file)
+function animateSharks(map)
 {
+    alert("animating sharks");
+    for (var i=0; i<1; i++){
+        var filename = "output0."+i+".dat"
+        //alert(filename);
+        readTextFile(map, filename);        
+    }
+}
+
+function readTextFile(map, file)
+{
+    //alert("reading text file "+file);
     var rawFile = new XMLHttpRequest();
     rawFile.open("GET", file, false);
     rawFile.onreadystatechange = function ()
@@ -137,64 +148,61 @@ function readTextFile(file)
         {
             if(rawFile.status === 200 || rawFile.status == 0)
             {
+                alert("YEah");
                 var allText = rawFile.responseText;
                 
                 var lines=allText.split("\n");
                 
-                var locations;
+                var locations = new Array();
                 
                 for (i = 0; i < lines.length; ++i) 
                 {
                     if (lines[i].split(" ")[3] == 1)
                     {
-                        var loc = [lines[i].split(" ")[1],lines[i].split(" ")[2]];
-                        
-                        alert(loc);
+                        var loc = [lines[i].split(" ")[2],lines[i].split(" ")[1]];
+                        locations.push(loc);
                         
                     }
                 }
                 
+                alert(locations);
+                setSharks(map, locations);
             }
             
         }
         
     }
-    rawFile.send(null);
+    //rawFile.send(null);
+    
 }
 
-
-
-readTextFile("output0.0.dat");
- 
-
 function setSharks(map, sharkLocations) {
+    for (var i = 0; i < sharkLocations.length; i++) {
+        var loc = sharkLocations[i];
+        var myLatLng = new google.maps.LatLng(loc[0], loc[1]);
+        addShark(myLatLng);
+   }
+}
+        
+
+function addShark(location) {
     var image = {
-        url: 'shark.png',
+        url: "shark.png",
         size: new google.maps.Size(20,32),
         origin: new google.maps.Point(0,0),
         anchor: new google.maps.Point(0,32)
     };
-    var shape = {
-        coords: [1, 1, 1, 20, 18, 20, 18 , 1],
-        type: 'poly'
-    };
-    
-    for (var i = 0; i < sharkLocations.length; i++) {
-        var loc = sharkLocations[i];
-        var myLatLng = new google.maps.LatLng(loc[0], loc[1]);
-        var marker = new google.maps.Marker({
-            position: myLatLng,
-            map: map,
-            icon: image,
-            shape: shape,
-            title: " ",
-            zIndex: 0
-        });
-    }
+    var marker = new google.maps.Marker({
+        position: location,
+        map: map
+    });
+    sharks.push(marker);
 }
+
+google.maps.event.addDomListener(window, 'load', initialize);
         
-        google.maps.event.addDomListener(window, 'load', initialize);
-        
+
+
 //******************************************************************************
     </script>
   </head>
@@ -204,6 +212,7 @@ function setSharks(map, sharkLocations) {
     <div id ="panel">
       <input type="button" value="Toggle visibility" onclick="overlay.toggle();"></input>
       <input type="button" value="Toggle DOM attachment" onclick="overlay.toggleDOM();"></input>
+      <input type="button" value="Animate Sharks" onclick="animateSharks();"></input>    
     </div>
 <!-- [END region_toolbar] -->
 
