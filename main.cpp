@@ -1,8 +1,8 @@
-/**
- * We need to include typemaps first to avoid problems with Intel
- * MPI's C++ bindings (which may collide with stdio.h's SEEK_SET,
- * SEEK_CUR etc.).
- */
+#include <hpx/hpx.hpp>
+#include <hpx/hpx_init.hpp>
+
+#include <libgeodecomp.h>
+
 #include <libgeodecomp/communication/typemaps.h>
 #include <libgeodecomp/communication/mpilayer.h>
 #include <libgeodecomp/parallelization/serialsimulator.h>
@@ -894,6 +894,18 @@ private:
 
 };    
 
+typedef
+HpxSimulator::HpxSimulator<ContainerCellType, RecursiveBisectionPartition<2> > 
+SimulatorType;
+
+LIBGEODECOMP_REGISTER_HPX_SIMULATOR_DECLARATION(
+						SimulatorType,
+						ConwayCellSimulator
+)
+LIBGEODECOMP_REGISTER_HPX_SIMULATOR(
+				    SimulatorType,
+				    ConwayCellSimulator
+				    )
 
 
 void runSimulation()
@@ -912,8 +924,10 @@ void runSimulation()
     // Hardcoded number of simulation steps
     int steps = 100;
 
-    SerialSimulator<ContainerCellType> sim(
-        new ADCIRCInitializer(prunedDirname, steps));
+    //    SerialSimulator<ContainerCellType> sim(
+
+
+    //sim(new ADCIRCInitializer(prunedDirname, steps));
 
     /*
     int ioPeriod = 1;
@@ -924,11 +938,25 @@ void runSimulation()
     sim.addWriter(writer);
     */
 
+    SimulatorType sim(
+		      new ADCIRCInitializer(prunedDirname, steps),
+		      1, //overcommitFactor
+		      new TracingBalancer(new OozeBalancer()),
+		      10, //balancingPeriod
+		      1 // ghostZoneWidth
+		      );
+
     sim.run();
+}
+
+int hpx_main()
+{
+    runSimulation();
+    
+    return hpx::finalize();
 }
 
 int main(int argc, char *argv[])
 {
-    runSimulation();
-    return 0;
+  return hpx::init(argc, argv);
 }
