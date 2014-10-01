@@ -907,7 +907,7 @@ void runSimulation()
     quadrantDim = FloatCoord<2>(quadrantSize, quadrantSize);
 
     // Hardcoded link to the directory
-    std::string prunedDirname("/home/zbyerly/adcirclgd/meshes/shin32");
+    std::string prunedDirname("/home/zbyerly/research/adcirclgd/meshes/shin32");
 
     // Hardcoded number of simulation steps
     int steps = 100;
